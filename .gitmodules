@@ -1,0 +1,3 @@
+[submodule "external/yield-utils-v2"]
+	path = external/yield-utils-v2
+	url = https://github.com/yieldprotocol/yield-utils-v2.git
