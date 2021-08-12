@@ -1186,6 +1186,7 @@ __metadata:
     "@types/node": ^16.4.13
     "@typescript-eslint/eslint-plugin": ^4.29.0
     "@typescript-eslint/parser": ^4.29.0
+    "@yield-protocol/utils-v2": ^2.2.21
     chai: ^4.3.4
     commitizen: ^4.2.4
     cross-env: ^7.0.3
@@ -1881,6 +1882,16 @@ __metadata:
   version: 1.1.0
   resolution: "@yarnpkg/lockfile@npm:1.1.0"
   checksum: 05b881b4866a3546861fee756e6d3812776ea47fa6eb7098f983d6d0eefa02e12b66c3fff931574120f196286a7ad4879ce02743c8bb2be36c6a576c7852083a
+  languageName: node
+  linkType: hard
+
+"@yield-protocol/utils-v2@npm:^2.2.21":
+  version: 2.2.21
+  resolution: "@yield-protocol/utils-v2@npm:2.2.21"
+  dependencies:
+    ethereumjs-util: ^7.0.8
+    ethers: ^5.0.7
+  checksum: 64c2d700e65f6f1f3dda6a89cb4b81e9090254d3e8944f746bb67b47700f78e0dab39ed8f50c582d8b59e04141cb1e27df994cffc1aec24ba3a34919404d4088
   languageName: node
   linkType: hard
 
@@ -5953,7 +5964,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ethereumjs-util@npm:^7.1.0":
+"ethereumjs-util@npm:^7.0.8, ethereumjs-util@npm:^7.1.0":
   version: 7.1.0
   resolution: "ethereumjs-util@npm:7.1.0"
   dependencies:
@@ -6081,7 +6092,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ethers@npm:^5.4.4":
+"ethers@npm:^5.0.7, ethers@npm:^5.4.4":
   version: 5.4.4
   resolution: "ethers@npm:5.4.4"
   dependencies:

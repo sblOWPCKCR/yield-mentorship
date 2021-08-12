@@ -30,55 +30,44 @@ describe("Unit tests", function () {
     it("should allow users to reserve words", async function () {
       const word = "sss";
       await expect(this.wr.connect(this.signers.user1).register(word))
-        .to.emit(this.wr, "OwnershipChange").withArgs(word, NULL_ADDRESS, this.signers.user1.address);
+        .to.emit(this.wr, "WordRegistered").withArgs(word, this.signers.user1.address);
     });
 
     it("should preserve ownership of words", async function () {
       const word = "sss";
-      expect(await this.wr.connect(this.signers.user1).does_own(word))
-        .to.equal(false);
+      expect(await this.wr.connect(this.signers.user1).wordToOwner(word))
+        .to.equal(NULL_ADDRESS);
 
       await this.wr.connect(this.signers.user1).register(word);
 
-      expect(await this.wr.connect(this.signers.user1).does_own(word))
-        .to.equal(true);
-      expect(await this.wr.connect(this.signers.user2).does_own(word))
-        .to.equal(false);
-      expect(await this.wr.connect(this.signers.admin).does_own(word))
-        .to.equal(false);
+      expect(await this.wr.connect(this.signers.user1).wordToOwner(word))
+        .to.equal(this.signers.user1.address);
     });
 
     it("should allow users to unregister words", async function () {
       const word = "sss";
-      await expect(this.wr.connect(this.signers.user1).register(word))
-        .to.emit(this.wr, "OwnershipChange").withArgs(word, NULL_ADDRESS, this.signers.user1.address);
+      await this.wr.connect(this.signers.user1).register(word);
 
       // user2 can't unregister
       await expect(this.wr.connect(this.signers.user2).unregister(word))
-        .to.be.reverted;
+        .to.be.revertedWith("not registered by you");
 
       await expect(this.wr.connect(this.signers.user1).unregister(word))
-        .to.emit(this.wr, "OwnershipChange").withArgs(word, this.signers.user1.address, NULL_ADDRESS,);
-      expect(await this.wr.connect(this.signers.user1).does_own(word))
-        .to.equal(false);
+        .to.emit(this.wr, "WordUnregistered").withArgs(word, this.signers.user1.address);
+      expect(await this.wr.connect(this.signers.user1).wordToOwner(word))
+        .to.equal(NULL_ADDRESS);
     })
 
     it("should allow words to be re-registered", async function () {
       const word = "sss";
-      await expect(this.wr.connect(this.signers.user1).register(word))
-        .to.not.be.reverted;
-
-      await expect(this.wr.connect(this.signers.user1).unregister(word))
-        .to.not.be.reverted;
+      await this.wr.connect(this.signers.user1).register(word);
+      await this.wr.connect(this.signers.user1).unregister(word);
 
       await expect(this.wr.connect(this.signers.user2).register(word))
         .to.not.be.reverted;
 
-      expect(await this.wr.connect(this.signers.user1).does_own(word))
-        .to.equal(false);
-      expect(await this.wr.connect(this.signers.user2).does_own(word))
-        .to.equal(true);
-
+      expect(await this.wr.connect(this.signers.user1).wordToOwner(word))
+        .to.equal(this.signers.user2.address);
     })
 
     it("should not allow users to steal words", async function () {
@@ -87,30 +76,7 @@ describe("Unit tests", function () {
         .to.not.be.reverted;
       // user2 is trying to steal
       await expect(this.wr.connect(this.signers.user2).register(word))
-        .to.be.reverted;
-    });
-
-    it("should not allow the owner to steal words", async function () {
-      const word = "sss";
-      await expect(this.wr.connect(this.signers.user1).register(word))
-        .to.not.be.reverted;
-      // admin can't do this
-      await expect(this.wr.connect(this.signers.admin).register(word))
-        .to.be.reverted;
-    });
-
-    it("should allow the owner to expropriate", async function () {
-      const word = "sss";
-      await expect(this.wr.connect(this.signers.user1).register(word))
-        .to.not.be.reverted;
-      // regular users can't do this
-      await expect(this.wr.connect(this.signers.user1).expropriate(word))
-        .to.be.reverted;
-      await expect(this.wr.connect(this.signers.user2).expropriate(word))
-        .to.be.reverted;
-      // but the admin can
-      await expect(this.wr.connect(this.signers.admin).expropriate(word))
-        .to.emit(this.wr, "OwnershipChange").withArgs(word, this.signers.user1.address, this.signers.admin.address);
+        .to.be.revertedWith("already registered");
     });
   });
 });
