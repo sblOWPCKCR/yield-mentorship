@@ -103,7 +103,12 @@ describe("Unit tests", function () {
       const word = "sss";
       await expect(this.wr.connect(this.signers.user1).register(word))
         .to.not.be.reverted;
-      // admin can't do this
+      // regular users can't do this
+      await expect(this.wr.connect(this.signers.user1).expropriate(word))
+        .to.be.reverted;
+      await expect(this.wr.connect(this.signers.user2).expropriate(word))
+        .to.be.reverted;
+      // but the admin can
       await expect(this.wr.connect(this.signers.admin).expropriate(word))
         .to.emit(this.wr, "OwnershipChange").withArgs(word, this.signers.user1.address, this.signers.admin.address);
     });
