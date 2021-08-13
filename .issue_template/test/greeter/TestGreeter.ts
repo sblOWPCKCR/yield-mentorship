@@ -8,6 +8,15 @@ import { Signers } from "../types";
 
 const { deployContract } = hre.waffle;
 
+declare module "mocha" {
+  export interface Context {
+    greeter: Greeter;
+
+    signers: { admin: SignerWithAddress };
+  }
+}
+
+
 describe("Unit tests", function () {
   before(async function () {
     this.signers = {} as Signers;

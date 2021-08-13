@@ -16,3 +16,6 @@ There are a couple of patterns to achieve this, but I suggest that you take the 
 ## Kovan
 GreenToken https://kovan.etherscan.io/address/0x4239B7aB36878a6b28dcE78DdCAF3cb0bd6af40a#code
 GreenVault https://kovan.etherscan.io/address/0x4f0d1950Aa61258df679c95Cd45bFe8A6499B9b8#code
+
+# Time spent
+4.5 hrs

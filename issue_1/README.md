@@ -12,3 +12,5 @@ The contract should be fully tested ([example](https://github.com/yieldprotocol/
 
 https://rinkeby.etherscan.io/address/0x0cda8a0e6874BaFF6B0201D5274c690c02a95DF5#code
 
+# Time spent
+5 hrs
