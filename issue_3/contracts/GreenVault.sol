@@ -1,51 +1,60 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.4;
 
-import "@yield-protocol/utils-v2/contracts/token/IERC20.sol";
+import "@yield-protocol/utils-v2/contracts/token/ERC20.sol";
 
 // error InsufficientBalance();
 // ^ can't use this b/c waffle doesn't support custom errors
 
 /**
-@title GreenToken
-@notice Just a standard ERC20 token that can be minted by anybody
+@title GreenVault
+@notice A (single-token) vault that mints wrapped tokens
+in response to deposits
  */
-contract GreenVault {
+contract GreenVault is ERC20("GreenVaultToken", "OWL_GVT", 18) {
+    /**
+    @notice the only token this vault supports
+     */
+    address public theOnlySupportedToken;
+
     /// @notice emitted on deposit
-    event EventDeposit(address user, address token, uint256 amount);
+    event EventMint(address user, address token, uint256 amount);
     /// @notice emitted on withdrawal
-    event EventWithdraw(address user, address token, uint256 amount);
+    event EventBurn(address user, address token, uint256 amount);
 
     /**
-    @notice (user -> (token, balance)) mapping
+    @param token address of the only token this vault will support
      */
-    mapping(address => mapping(address => uint256)) public deposits;
-
-    /**
-    @notice Deposit tokens
-    @param token token address
-    @param amount amount of tokens to deposit
-     */
-    function deposit(address token, uint256 amount) public {
-        IERC20(token).transferFrom(msg.sender, address(this), amount);
-
-        deposits[msg.sender][token] += amount;
-
-        emit EventDeposit(msg.sender, token, amount);
+    constructor(address token) {
+        theOnlySupportedToken = token;
     }
 
     /**
-    @notice Withdraw tokens
-    @param token token address
+    @notice Mint Vault token by depositing external token
+    @param amount amount of tokens to deposit
+     */
+    function mint(uint256 amount) public {
+        address token = theOnlySupportedToken;
+
+        _mint(msg.sender, amount);
+
+        IERC20(token).transferFrom(msg.sender, address(this), amount);
+
+        emit EventMint(msg.sender, token, amount);
+    }
+
+    /**
+    @notice Burn Vault token and withdraw external token
     @param amount amount of tokens to withdraw
      */
 
-    function withdraw(address token, uint256 amount) public {
-        require(deposits[msg.sender][token] >= amount, "InsufficientBalance");
+    function burn(uint256 amount) public {
+        address token = theOnlySupportedToken;
 
-        deposits[msg.sender][token] -= amount;
+        _burn(msg.sender, amount);
 
         IERC20(token).transfer(msg.sender, amount);
-        emit EventWithdraw(msg.sender, token, amount);
+
+        emit EventBurn(msg.sender, token, amount);
     }
 }

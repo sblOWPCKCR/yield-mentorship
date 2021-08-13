@@ -10,5 +10,8 @@ When done, have a look at [WETH9](https://etherscan.io/address/0xc02aaa39b223fe8
 
 # Solution
 ## Kovan
+GreenToken https://kovan.etherscan.io/address/0xD76C8a919e23D05691EcdEaE662D792137EAC746#code
+GreenVault https://kovan.etherscan.io/address/0xc0bBBd6ed9092Ed978CAbDAdC74cb021b8330d41#code
 
 # Time spent
+1 hr
