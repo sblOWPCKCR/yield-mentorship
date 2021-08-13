@@ -21,6 +21,8 @@ describe("Unit tests", function () {
     console.log("admin: ", this.signers.admin.address);
   });
 
+  const word = "sss";
+
   describe("WordRegistry", function () {
     beforeEach(async function () {
       const artifact: Artifact = await hre.artifacts.readArtifact("WordRegistry");
@@ -28,13 +30,11 @@ describe("Unit tests", function () {
     });
 
     it("should allow users to reserve words", async function () {
-      const word = "sss";
       await expect(this.wr.connect(this.signers.user1).register(word))
         .to.emit(this.wr, "WordRegistered").withArgs(word, this.signers.user1.address);
     });
 
     it("should preserve ownership of words", async function () {
-      const word = "sss";
       expect(await this.wr.connect(this.signers.user1).wordToOwner(word))
         .to.equal(NULL_ADDRESS);
 
@@ -44,39 +44,44 @@ describe("Unit tests", function () {
         .to.equal(this.signers.user1.address);
     });
 
-    it("should allow users to unregister words", async function () {
-      const word = "sss";
-      await this.wr.connect(this.signers.user1).register(word);
+    describe("with a registered name", function () {
 
-      // user2 can't unregister
-      await expect(this.wr.connect(this.signers.user2).unregister(word))
-        .to.be.revertedWith("not registered by you");
+      beforeEach(async function () {
+        await this.wr.connect(this.signers.user1).register(word);
+      });
 
-      await expect(this.wr.connect(this.signers.user1).unregister(word))
-        .to.emit(this.wr, "WordUnregistered").withArgs(word, this.signers.user1.address);
-      expect(await this.wr.connect(this.signers.user1).wordToOwner(word))
-        .to.equal(NULL_ADDRESS);
-    })
+      it("should now allow other users to steal", async function () {
+        await expect(this.wr.connect(this.signers.user2).register(word))
+          .to.be.revertedWith("already registered");
+      });
 
-    it("should allow words to be re-registered", async function () {
-      const word = "sss";
-      await this.wr.connect(this.signers.user1).register(word);
-      await this.wr.connect(this.signers.user1).unregister(word);
+      it("should now allow other users to unregister", async function () {
+        // user2 can't unregister
+        await expect(this.wr.connect(this.signers.user2).unregister(word))
+          .to.be.revertedWith("not registered by you");
+      });
 
-      await expect(this.wr.connect(this.signers.user2).register(word))
-        .to.not.be.reverted;
+      it("should emit event on unregistration", async function () {
+        await expect(this.wr.connect(this.signers.user1).unregister(word))
+          .to.emit(this.wr, "WordUnregistered").withArgs(word, this.signers.user1.address);
+      });
 
-      expect(await this.wr.connect(this.signers.user1).wordToOwner(word))
-        .to.equal(this.signers.user2.address);
-    })
+      it("should relinquish ownership on unregistration", async function () {
+        await this.wr.connect(this.signers.user1).unregister(word);
 
-    it("should not allow users to steal words", async function () {
-      const word = "sss";
-      await expect(this.wr.connect(this.signers.user1).register(word))
-        .to.not.be.reverted;
-      // user2 is trying to steal
-      await expect(this.wr.connect(this.signers.user2).register(word))
-        .to.be.revertedWith("already registered");
+        expect(await this.wr.connect(this.signers.user1).wordToOwner(word))
+          .to.equal(NULL_ADDRESS);
+      });
+
+      it("should allow words to be re-registered", async function () {
+        await this.wr.connect(this.signers.user1).unregister(word);
+
+        await expect(this.wr.connect(this.signers.user2).register(word))
+          .to.not.be.reverted;
+
+        expect(await this.wr.connect(this.signers.user1).wordToOwner(word))
+          .to.equal(this.signers.user2.address);
+      })
     });
   });
 });
