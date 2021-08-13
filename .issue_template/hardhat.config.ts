@@ -1,5 +1,8 @@
+import "@nomiclabs/hardhat-etherscan";
 import "@nomiclabs/hardhat-waffle";
 import "@typechain/hardhat";
+
+
 import "hardhat-gas-reporter";
 import "solidity-coverage";
 
@@ -34,6 +37,11 @@ if (!mnemonic) {
 const infuraApiKey: string | undefined = process.env.INFURA_API_KEY;
 if (!infuraApiKey) {
   throw new Error("Please set your INFURA_API_KEY in a .env file");
+}
+
+const etherscanKey: string | undefined = process.env.ETHERSCAN_KEY;
+if (!etherscanKey) {
+  throw new Error("Please set your ETHERSCAN_KEY in a .env file");
 }
 
 function getChainConfig(network: keyof typeof chainIds): NetworkUserConfig {
@@ -78,7 +86,7 @@ const config: HardhatUserConfig = {
     tests: "./test",
   },
   solidity: {
-    version: "0.8.6",
+    version: "0.8.4",
     settings: {
       metadata: {
         // Not including the metadata hash
@@ -97,6 +105,9 @@ const config: HardhatUserConfig = {
     outDir: "typechain",
     target: "ethers-v5",
   },
+  etherscan: {
+    apiKey: etherscanKey
+  }
 };
 
 export default config;
