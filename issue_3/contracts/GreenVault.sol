@@ -15,7 +15,7 @@ contract GreenVault is ERC20("GreenVaultToken", "OWL_GVT", 18) {
     /**
     @notice the only token this vault supports
      */
-    address public theOnlySupportedToken;
+    IERC20 public theOnlySupportedToken;
 
     /// @notice emitted on deposit
     event EventMint(address user, address token, uint256 amount);
@@ -25,7 +25,7 @@ contract GreenVault is ERC20("GreenVaultToken", "OWL_GVT", 18) {
     /**
     @param token address of the only token this vault will support
      */
-    constructor(address token) {
+    constructor(IERC20 token) {
         theOnlySupportedToken = token;
     }
 
@@ -34,13 +34,13 @@ contract GreenVault is ERC20("GreenVaultToken", "OWL_GVT", 18) {
     @param amount amount of tokens to deposit
      */
     function mint(uint256 amount) public {
-        address token = theOnlySupportedToken;
+        IERC20 token = theOnlySupportedToken;
 
         _mint(msg.sender, amount);
 
-        IERC20(token).transferFrom(msg.sender, address(this), amount);
+        token.transferFrom(msg.sender, address(this), amount);
 
-        emit EventMint(msg.sender, token, amount);
+        emit EventMint(msg.sender, address(token), amount);
     }
 
     /**
@@ -49,12 +49,12 @@ contract GreenVault is ERC20("GreenVaultToken", "OWL_GVT", 18) {
      */
 
     function burn(uint256 amount) public {
-        address token = theOnlySupportedToken;
+        IERC20 token = theOnlySupportedToken;
 
         _burn(msg.sender, amount);
 
-        IERC20(token).transfer(msg.sender, amount);
+        token.transfer(msg.sender, amount);
 
-        emit EventBurn(msg.sender, token, amount);
+        emit EventBurn(msg.sender, address(token), amount);
     }
 }
