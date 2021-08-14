@@ -96,7 +96,10 @@ const config: HardhatUserConfig = {
       modelChecker: {
         engine: needsSmtChecker ? "chc" : "none",
         showUnproved: true,
-        timeout: 60,
+        timeout: 0,
+        contracts: {
+          "contracts/BadVault.sol": ["BadVault"]
+        }
       },
       metadata: {
         // Not including the metadata hash
