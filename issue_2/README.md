@@ -18,4 +18,4 @@ GreenToken https://kovan.etherscan.io/address/0x4239B7aB36878a6b28dcE78DdCAF3cb0
 GreenVault https://kovan.etherscan.io/address/0x4f0d1950Aa61258df679c95Cd45bFe8A6499B9b8#code
 
 # Time spent
-4.5 hrs
+7 hrs
