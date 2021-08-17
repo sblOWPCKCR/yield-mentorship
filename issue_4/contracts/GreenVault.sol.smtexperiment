@@ -1,0 +1,365 @@
+// SPDX-License-Identifier: MIT
+pragma solidity >=0.8.4;
+
+import "@yield-protocol/utils-v2/contracts/access/Ownable.sol";
+import "@yield-protocol/utils-v2/contracts/token/ERC20.sol";
+
+import "./ds-math/math.sol";
+
+// error InsufficientBalance();
+// ^ can't use this b/c waffle doesn't support custom errors
+
+struct GlobalStateOld {
+    uint256 totalTokensDeposited;
+    uint256 totalRewardsSupply;
+}
+
+struct UserStateOld {
+    uint256 tokens;
+    uint256 rewards;
+}
+
+// contract GreenVaultEngineOld is DSMath {
+//     function rewardsForTokens(uint256 tokens, uint256 rewardsFraction) pure internal returns (uint256) {
+//         return wmul(tokens, rewardsFraction);
+//     }
+
+//     function deposit(GlobalState memory globalState, UserState memory userState,
+//         uint256 tokens, uint256 rewardsFraction) pure internal
+//         returns (GlobalState memory gs, UserState memory us) {
+//             gs.totalTokensDeposited = globalState.totalTokensDeposited + tokens;
+//             us.tokens = userState.tokens + tokens;
+
+//             uint256 rewards = rewardsForTokens(tokens, rewardsFraction);
+//             gs.totalRewardsSupply = globalState.totalRewardsSupply + rewards;
+//             us.rewards = userState.rewards + rewards;
+//     }
+
+//     function deposit2(GlobalState memory globalState, UserState memory userState,
+//         uint256 tokens, uint256 rewardsFraction) pure internal 
+//         returns (GlobalState memory gs, UserState memory us) {
+//             gs.totalTokensDeposited = globalState.totalTokensDeposited + tokens;
+//             us.tokens = userState.tokens + tokens;
+
+//             uint256 rewards = rewardsForTokens(tokens, rewardsFraction);
+//             gs.totalRewardsSupply = globalState.totalRewardsSupply + rewards;
+//             us.rewards = userState.rewards + rewards;
+//     }
+
+//     function withdraw(GlobalState memory globalState, UserState memory userState, uint256 tokens, uint256 rewardsFraction) pure internal 
+//         returns (GlobalState memory gs, UserState memory us) {
+//         uint256 rewards = rewardsForTokens(tokens, rewardsFraction);
+
+//         require(tokens <= globalState.totalTokensDeposited);
+//         require(tokens <= userState.tokens);
+
+//         require(rewards <= globalState.totalRewardsSupply);
+//         require(rewards <= userState.rewards);
+
+//         gs.totalTokensDeposited = globalState.totalTokensDeposited - tokens;
+//         us.tokens = userState.tokens - tokens;
+
+//         gs.totalRewardsSupply = globalState.totalRewardsSupply - rewards;
+//         us.rewards = userState.rewards - rewards;
+//     }
+
+//     function withdrawRewards(GlobalState memory globalState, UserState memory userState, uint256 rewards, uint256 rewardsFraction) pure internal 
+//     returns (GlobalState memory gs, UserState memory us){
+//         uint256 tokens = wdiv(rewards, rewardsFraction);
+
+//         require(tokens <= globalState.totalTokensDeposited);
+//         require(tokens <= userState.tokens);
+
+//         require(rewards <= globalState.totalRewardsSupply);
+//         require(rewards <= userState.rewards);
+
+//         gs.totalTokensDeposited = globalState.totalTokensDeposited - tokens;
+//         us.tokens = userState.tokens - tokens;
+
+//         gs.totalRewardsSupply = globalState.totalRewardsSupply - rewards;
+//         us.rewards = userState.rewards - rewards;
+//     }
+
+//     function _inv(/*uint256 tokensDeposited, */uint256 rewardsFraction, uint256 toDeposit, uint256 toWithdraw) public pure {
+//         uint256 tokensDeposited = 1000;
+//         // uint256 rewardsFraction = WAD / 2;
+//         require(rewardsFraction >= WAD / 10 && rewardsFraction <= WAD * 10);
+
+//         uint256 rewardsDeposited = rewardsForTokens(tokensDeposited, rewardsFraction);
+//         // require(rewardsForTokens(toDeposit, rewardsFraction) >= rewardsToWithdraw);
+//         require(toWithdraw <= toDeposit);
+
+//         GlobalState memory gs = GlobalState(tokensDeposited, rewardsDeposited);
+//         UserState memory us = UserState(tokensDeposited, rewardsDeposited);
+
+//         GreenVaultEngine.deposit(gs, us, toDeposit, rewardsFraction);
+//         assert(toDeposit == 0 || gs.totalTokensDeposited > tokensDeposited);
+
+//         // (GlobalState memory gs2, UserState memory us2) = deposit(gs, us, toDeposit, rewardsFraction);
+//         // assert(toDeposit == 0 || gs2.totalTokensDeposited > tokensDeposited);
+
+//         // // (GlobalState memory gs3, UserState memory us3) = withdrawRewards(gs2, us2, rewardsToWithdraw, rewardsFraction);
+//         // (GlobalState memory gs3, UserState memory us3) = withdraw(gs2, us2, toWithdraw, rewardsFraction);
+
+//         // assert(gs3.totalTokensDeposited >= tokensDeposited);
+//         // assert(us3.tokens >= tokensDeposited);
+
+//         // assert(gs3.totalRewardsSupply >= rewardsDeposited);
+//         // assert(us3.rewards >= rewardsDeposited);
+//     }
+// }
+
+struct GlobalState {
+    uint256 rewardsFraction;
+    // uint256 totalTokensDeposited;
+    // uint256 totalRewardsSupply;
+}
+
+struct UserState {
+    uint256 tokens;
+    uint256 rewards;
+}
+
+contract GreenVaultEngine is DSMath {
+    function rewardsForTokens(uint256 tokens, uint256 rewardsFraction) pure internal returns (uint256) {
+        //return wmul(tokens, rewardsFraction);
+        return tokens * rewardsFraction;
+    }
+
+    function deposit(GlobalState storage globalState, UserState storage userState,
+        uint256 tokens) internal
+        {
+            userState.tokens += tokens;
+
+            uint256 rewards = rewardsForTokens(tokens, globalState.rewardsFraction);
+            userState.rewards += rewards;
+    }
+
+    function withdraw(GlobalState storage globalState, UserState storage userState, uint256 tokens) internal {
+        uint256 rewards = rewardsForTokens(tokens, globalState.rewardsFraction);
+
+        require(tokens <= userState.tokens);
+        require(rewards <= userState.rewards);
+
+        userState.tokens -= tokens;
+        userState.rewards -= rewards;
+    }
+
+    // function withdrawRewards(GlobalState memory globalState, UserState memory userState, uint256 rewards, uint256 rewardsFraction) pure internal 
+    // returns (GlobalState memory gs, UserState memory us){
+    //     uint256 tokens = wdiv(rewards, rewardsFraction);
+
+    //     require(tokens <= globalState.totalTokensDeposited);
+    //     require(tokens <= userState.tokens);
+
+    //     require(rewards <= globalState.totalRewardsSupply);
+    //     require(rewards <= userState.rewards);
+
+    //     gs.totalTokensDeposited = globalState.totalTokensDeposited - tokens;
+    //     us.tokens = userState.tokens - tokens;
+
+    //     gs.totalRewardsSupply = globalState.totalRewardsSupply - rewards;
+    //     us.rewards = userState.rewards - rewards;
+    // }
+}
+
+contract GreenVaultEngineTest is GreenVaultEngine {
+
+    GlobalState private globalState;
+    UserState private userState;
+
+    // constructor(uint256 tokensDeposited) {
+    //     uint256 rewardsDeposited = 0;//rewardsForTokens(tokensDeposited, globalState.rewardsFraction);
+    //     userState = UserState(tokensDeposited, 0);
+    // }
+
+    function setRewardsFraction(uint256 f) public {
+        globalState.rewardsFraction = f;
+    }
+
+    function deposit(uint256 toDeposit) public {
+        GreenVaultEngine.deposit(globalState, userState, toDeposit);
+    }
+
+    function withdraw(uint256 toWithdraw) public {
+        GreenVaultEngine.withdraw(globalState, userState, toWithdraw);
+    }
+
+    // function inv() public view {
+    //     assert(rewardsForTokens(userState.tokens, globalState.rewardsFraction) == userState.rewards);
+    //     // assert(2 == 3);
+    // }
+
+    function inv2() public {
+        this.setRewardsFraction(2);
+        this.deposit(1);
+        this.setRewardsFraction(1);
+        this.withdraw(1);
+
+        assert(2 == 3);
+        // this.inv();
+    }
+
+
+    // function withdraw(uint256 toWithdraw) public {
+    //     GreenVaultEngine.withdraw(globalState, userState, toWithdraw);
+    // }
+
+
+    // function _inv(uint256 tokensDeposited, uint256 toDeposit, uint256 toWithdraw) public {
+    //     // uint256 tokensDeposited = 1000;
+    //     // uint256 rewardsFraction = WAD / 2;
+    //     // require(rewardsFraction >= WAD / 10 && rewardsFraction <= WAD * 10);
+
+    //     uint256 rewardsDeposited = rewardsForTokens(tokensDeposited, globalState.rewardsFraction);
+
+    //     // userState = UserState(tokensDeposited, rewardsDeposited);
+
+    //     // require(rewardsForTokens(toDeposit, rewardsFraction) >= rewardsToWithdraw);
+    //     require(toWithdraw <= toDeposit);
+
+    //     GreenVaultEngine.deposit(globalState, userState, toDeposit);
+    //     assert(userState.tokens == tokensDeposited);
+
+    //     // (GlobalState memory gs2, UserState memory us2) = deposit(gs, us, toDeposit, rewardsFraction);
+    //     // assert(toDeposit == 0 || gs2.totalTokensDeposited > tokensDeposited);
+
+    //     // // (GlobalState memory gs3, UserState memory us3) = withdrawRewards(gs2, us2, rewardsToWithdraw, rewardsFraction);
+    //     // (GlobalState memory gs3, UserState memory us3) = withdraw(gs2, us2, toWithdraw, rewardsFraction);
+
+    //     // assert(gs3.totalTokensDeposited >= tokensDeposited);
+    //     // assert(us3.tokens >= tokensDeposited);
+
+    //     // assert(gs3.totalRewardsSupply >= rewardsDeposited);
+    //     // assert(us3.rewards >= rewardsDeposited);
+    // }
+}
+
+/**
+@title GreenVault
+@notice A (single-token) vault that mints wrapped tokens
+in response to deposits
+ */
+contract GreenVault is
+    ERC20("GreenVaultToken", "OWL_GVT", 18),
+    Ownable /*, DSMath*/
+{
+    /**
+    @notice the only token this vault supports
+     */
+    IERC20Metadata public theOnlySupportedToken;
+
+    bool private is_entered;
+
+    // uint256 public rewardFractionWad;
+
+    uint256 _deposits; // #nonprod
+
+    /// @notice emitted on deposit
+    event EventMint(address user, address token, uint256 amount);
+    /// @notice emitted on withdrawal
+    event EventBurn(address user, address token, uint256 amount);
+
+    event RewardFractionSet(uint256 rewardFractionWad);
+
+    modifier nonReentrant() {
+        require(!is_entered);
+        is_entered = true;
+        _;
+        is_entered = false;
+    }
+
+    /**
+    param token address of the only token this vault will support
+     */
+    constructor() /*IERC20Metadata token/*, uint256 _rewardFractionWad*/
+    {
+        // require(token.decimals() == 18, "Only support 18-decimal tokens");
+        // theOnlySupportedToken = token;
+        // setRewardFraction(_rewardFractionWad);
+        // rewardFractionWad = _rewardFractionWad;
+    }
+
+    // function setRewardFraction(uint256 _rewardFractionWad) private onlyOwner {
+    //     rewardFractionWad = _rewardFractionWad;
+    //     emit RewardFractionSet(rewardFractionWad);
+    // }
+
+    /**
+    @notice Mint Vault token by depositing external token
+    @param amount amount of tokens to deposit
+     */
+    function deposit(uint256 amount) public nonReentrant {
+        IERC20 token = theOnlySupportedToken;
+
+        //uint256 rewardAmount = wmul(amount, rewardFractionWad);
+        uint256 rewardAmount = amount / 2;
+
+        _mint(msg.sender, rewardAmount);
+
+        _deposits += amount; // #nonprod
+        // token.transferFrom(msg.sender, address(this), amount);
+
+        emit EventMint(msg.sender, address(token), rewardAmount);
+    }
+
+    /**
+    @notice Burn Vault token and withdraw external token
+    @param amount amount of tokens to withdraw
+     */
+
+    function withdraw(uint256 amount) public nonReentrant {
+        IERC20 token = theOnlySupportedToken;
+
+        // // uint256 rewardAmount = wmul(amount, rewardFractionWad);
+        // uint256 rewardAmount = amount / 2;
+
+        // _burn(msg.sender, rewardAmount);
+
+        // _deposits -= amount; // #nonprod
+        // // token.transfer(msg.sender, amount);
+
+        // emit EventBurn(msg.sender, address(token), rewardAmount);
+
+        // uint256 burnAmount = wdiv(amount, rewardFractionWad);
+        uint256 burnAmount = amount * 2;
+
+        _burn(msg.sender, amount);
+
+        _deposits -= burnAmount; // #nonprod
+        // token.transfer(msg.sender, burnAmount);
+
+        emit EventBurn(msg.sender, address(token), amount);
+    }
+
+    function rewardsForToken(
+        uint256 amount,
+        uint256 /*rewardFraction*/
+    ) internal pure returns (uint256) {
+        return amount / 2;
+    }
+
+    function inv(
+        uint256 deposit_amount,
+        uint256 withdraw_amount,
+        uint256 rewardFraction
+    ) public pure {
+        require(rewardsForToken(withdraw_amount, rewardFraction) <= rewardsForToken(deposit_amount, rewardFraction));
+
+        uint256 token_balance = 0;
+        uint256 rewards_balance = 0;
+        token_balance += deposit_amount;
+        rewards_balance += rewardsForToken(deposit_amount, rewardFraction);
+
+        token_balance -= withdraw_amount;
+        rewards_balance -= rewardsForToken(withdraw_amount, rewardFraction);
+
+        assert(token_balance >= 0);
+    }
+
+    function _inv() public view {
+        // #nonprod
+        //assert(wmul(_deposits[user], rewardFractionWad) == this.balanceOf(user)); // #nonprod
+        // assert(_deposits / 2 >= this.totalSupply()); // #nonprod
+    } // #nonprod
+}

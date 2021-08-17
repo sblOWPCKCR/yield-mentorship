@@ -79,12 +79,12 @@
     "lint:sol": "solhint --config ./.solhint.json --max-warnings 0 \"contracts/**/*.sol\"",
     "lint:ts": "eslint --config ./.eslintrc.yaml --ignore-path ./.eslintignore --ext .js,.ts .",
     "postinstall": "husky install",
-    "preprocess": "mkdir -p .processed; YARN_PREPROCESS=1 hardhat preprocess --dest .processed",
+    "preprocess": "true || mkdir -p .processed; YARN_PREPROCESS=1 hardhat preprocess --dest .processed",
     "prettier": "prettier --config ./.prettierrc.yaml --write \"**/*.{js,json,md,sol,ts}\"",
     "prettier:check": "prettier --check --config ./.prettierrc.yaml \"**/*.{js,json,md,sol,ts}\"",
     "test": "hardhat test",
     "verify": "mkdir -p .processed; yarn preprocess && hardhat verify",
-    "typechain": "cross-env TS_NODE_TRANSPILE_ONLY=true hardhat typechain"
+    "typechain": "yarn preprocess && cross-env TS_NODE_TRANSPILE_ONLY=true hardhat typechain"
   },
   "packageManager": "yarn@3.0.1-rc.2",
   "dependencies": {

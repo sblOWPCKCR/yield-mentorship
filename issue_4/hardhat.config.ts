@@ -45,9 +45,9 @@ if (!etherscanKey) {
   throw new Error("Please set your ETHERSCAN_KEY in a .env file");
 }
 
-const needsPreprocessing = (process.env.YARN_PREPROCESS == "1");
-const needsSmtChecker = (process.env.SMT_CHECKER == "1")
-const contractsDir = needsPreprocessing || needsSmtChecker ? "./contracts" : "./.processed";
+// const needsPreprocessing = false; //(process.env.YARN_PREPROCESS == "1");
+// const needsSmtChecker = (process.env.SMT_CHECKER == "1")
+const contractsDir = "./contracts"; //needsPreprocessing || needsSmtChecker ? "./contracts" : "./.processed";
 
 function getChainConfig(network: keyof typeof chainIds): NetworkUserConfig {
   const url: string = "https://" + network + ".infura.io/v3/" + infuraApiKey;
@@ -93,14 +93,15 @@ const config: HardhatUserConfig = {
   solidity: {
     version: "0.8.7",
     settings: {
-      modelChecker: {
-        engine: needsSmtChecker ? "chc" : "none",
-        showUnproved: true,
-        timeout: 0,
-        // contracts: {
-        //   "contracts/BadVault.sol": ["BadVault"]
-        // }
-      },
+      // modelChecker: needsSmtChecker ? {
+      //   engine: needsSmtChecker ? "chc" : "none",
+      //   showUnproved: true,
+      //   timeout: 0,
+      //   // targets: ["assert"],
+      //   contracts: {
+      //     "contracts/GreenVault.sol": ["GreenVaultEngineTest"]
+      //   }
+      // } : null,
       metadata: {
         // Not including the metadata hash
         // https://github.com/paulrberg/solidity-template/issues/31
@@ -120,20 +121,21 @@ const config: HardhatUserConfig = {
   },
   etherscan: {
     apiKey: etherscanKey
-  },
-  preprocess: {
-    eachLine: (hre) => ({
-      transform: needsSmtChecker
-        ? (line) => line // don't remote #nonprod code when SMTChecker is requested
-        : (line) => {
-          if (line.trimEnd().endsWith("#noprod")) {
-            return "// " + line;
-          }
-          return line;
-        },
-      settings: { comment: true } // ensure the cache is working, in that example it can be anything as there is no option, the preprocessing happen all the time
-    })
-  },
+  }
+  // ,
+  // preprocess: {
+  //   eachLine: (hre) => ({
+  //     transform: needsSmtChecker
+  //       ? (line) => line // don't remote #nonprod code when SMTChecker is requested
+  //       : (line) => {
+  //         if (line.trimEnd().endsWith("#noprod")) {
+  //           return "// " + line;
+  //         }
+  //         return line;
+  //       },
+  //     settings: { comment: true } // ensure the cache is working, in that example it can be anything as there is no option, the preprocessing happen all the time
+  //   })
+  // },
 };
 
 export default config;

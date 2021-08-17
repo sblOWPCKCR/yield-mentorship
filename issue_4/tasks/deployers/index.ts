@@ -6,7 +6,7 @@ task("deploy")
     const addresses: {[name: string]: string} = {};
     const initializers : {[name: string]: () => Iterable<any>} = {
       "GreenToken": () => {return []},
-      "GreenVault": () => {return [addresses["GreenToken"]];}
+      "GreenVault": () => {return [addresses["GreenToken"], (10 ** 18).toString()];}
     }
 
     for (const contract_name in initializers) {
