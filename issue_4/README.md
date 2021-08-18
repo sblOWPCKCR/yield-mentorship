@@ -6,8 +6,8 @@ This fraction is an arbitrary decimal number that can be set only by the contrac
 
 # Solution
 ## Kovan
-GreenToken: https://kovan.etherscan.io/address/0x9Bf598A28849594E6d864c337705C01eE6847E36#code
-GreenVault: https://kovan.etherscan.io/address/0x12792f1610D09237a0337Ee770be3229c0De84dF#code
+GreenToken: https://kovan.etherscan.io/address/0xad0e9e2f539F7EE2d5fCdA407855E4525f040db0#code
+GreenVault: https://kovan.etherscan.io/address/0xe2773413Df3a030671898c565bCb671473e58e22#code
 
 # Time spent
-9hrs (see issue_4/contracts/GreenVault.sol.smtexperiment)
+9.5hrs (see issue_4/contracts/GreenVault.sol.smtexperiment)

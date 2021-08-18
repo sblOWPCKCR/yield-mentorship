@@ -4,85 +4,75 @@ pragma solidity >=0.8.4;
 import "@yield-protocol/utils-v2/contracts/access/Ownable.sol";
 import "@yield-protocol/utils-v2/contracts/token/ERC20.sol";
 
-contract FPMath {
-    uint256 internal constant WAD = 10 ** 18;
+/**
+@dev Internal library that implements Fixed Point Math
+All numbers are WADs - fixed point numbers with decimals=18
+ */
+library FPMath {
+    uint256 internal constant WAD = 1e18;
 
-    function wadMul(uint256 a, uint256 b) public pure returns (uint256) {
+    /**
+    @notice Multiply 2 WADs
+    */
+    function wadMul(uint256 a, uint256 b) internal pure returns (uint256) {
         uint256 ret = (a * b);
         require(b == 0 || ret / b == a, "wadMul: overflow");
         return ret / WAD;
     }
 }
 
-// error InsufficientBalance();
-// ^ can't use this b/c waffle doesn't support custom errors
-
 /**
 @title GreenVault
 @notice A (single-token) vault that mints wrapped tokens
 in response to deposits
  */
-contract GreenVault is
-    ERC20("GreenVaultToken", "OWL_GVT", 18),
-    Ownable,
-    FPMath
-{
+contract GreenVault is ERC20("GreenVaultToken", "OWL_GVT", 18), Ownable {
     /**
     @notice the only token this vault supports
      */
     IERC20Metadata public theOnlySupportedToken;
 
-    bool private is_entered;
-
     /**
-    Multiplier: for each token deposited we mint `rewardFractionWad` Vault Tokens
+    Multiplier: for each token deposited we mint `exchangeRateWad` Vault Tokens
 
     It's represented as a wad (a 18-digit fixed point number)
      */
-    uint256 public rewardFractionWad;
+    uint256 public exchangeRateWad;
 
     /// @notice emitted on deposit
-    event EventMint(address user, address token, uint256 amount);
+    event Minted(address user, address token, uint256 amount);
     /// @notice emitted on withdrawal
-    event EventBurn(address user, address token, uint256 amount);
+    event Burned(address user, address token, uint256 amount);
 
-    event RewardFractionSet(uint256 rewardFractionWad);
-
-    modifier nonReentrant() {
-        require(!is_entered);
-        is_entered = true;
-        _;
-        is_entered = false;
-    }
+    event ExchangeRateSet(uint256 exchangeRateWad);
 
     /**
     @param token address of the only token this vault will support
-    @param _rewardFractionWad reward fraction to start with
+    @param _exchangeRateWad exchange rate to start with
      */
-    constructor(IERC20Metadata token, uint256 _rewardFractionWad)
-    {
+    constructor(IERC20Metadata token, uint256 _exchangeRateWad) {
         theOnlySupportedToken = token;
-        setRewardFraction(_rewardFractionWad);
+        setExchangeRate(_exchangeRateWad);
     }
 
-    function setRewardFraction(uint256 _rewardFractionWad) public onlyOwner {
-        rewardFractionWad = _rewardFractionWad;
-        emit RewardFractionSet(rewardFractionWad);
+    function setExchangeRate(uint256 _exchangeRateWad) public onlyOwner {
+        exchangeRateWad = _exchangeRateWad;
+        emit ExchangeRateSet(exchangeRateWad);
     }
 
     /**
     @notice Mint Vault token by depositing external token
     @param amount amount of tokens to deposit
      */
-    function deposit(uint256 amount) public nonReentrant {
+    function deposit(uint256 amount) public {
         IERC20 token = theOnlySupportedToken;
 
-        uint256 rewardAmount = wadMul(amount, rewardFractionWad);
+        uint256 exchangeAmount = FPMath.wadMul(amount, exchangeRateWad);
+        _mint(msg.sender, exchangeAmount);
 
-        _mint(msg.sender, rewardAmount);
         token.transferFrom(msg.sender, address(this), amount);
 
-        emit EventMint(msg.sender, address(token), rewardAmount);
+        emit Minted(msg.sender, address(token), exchangeAmount);
     }
 
     /**
@@ -90,14 +80,14 @@ contract GreenVault is
     @param amount amount of tokens to withdraw
      */
 
-    function withdraw(uint256 amount) public nonReentrant {
+    function withdraw(uint256 amount) public {
         IERC20 token = theOnlySupportedToken;
 
-        uint256 rewardAmount = wadMul(amount, rewardFractionWad);
-        _burn(msg.sender, rewardAmount);
+        uint256 exchangeAmount = FPMath.wadMul(amount, exchangeRateWad);
+        _burn(msg.sender, exchangeAmount);
 
         token.transfer(msg.sender, amount);
 
-        emit EventBurn(msg.sender, address(token), rewardAmount);
+        emit Burned(msg.sender, address(token), exchangeAmount);
     }
 }

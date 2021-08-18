@@ -77,7 +77,7 @@ describe("Unit tests", function () {
 
       it("emit events", async function () {
         await expect(this.gvault.deposit(starting_balance))
-          .to.emit(this.gvault, "EventMint").withArgs(this.signers.user1.address, this.gtoken.address, 2 * starting_balance);
+          .to.emit(this.gvault, "Minted").withArgs(this.signers.user1.address, this.gtoken.address, 2 * starting_balance);
       });
 
       it("don't change other user's balance", async function () {
@@ -115,27 +115,27 @@ describe("Unit tests", function () {
 
       it("emit correct message", async function () {
         await expect(this.gvault.withdraw(starting_balance))
-          .to.emit(this.gvault, "EventBurn").withArgs(this.signers.user1.address, this.gtoken.address, starting_balance * 2);
+          .to.emit(this.gvault, "Burned").withArgs(this.signers.user1.address, this.gtoken.address, starting_balance * 2);
       })
     });
 
-    it("rewards fraction can be increased by admin", async function () {
+    it("exchange rate can be increased by admin", async function () {
       const newR = (4 * (10 ** 18)).toString();
-      await expect(this.gvault.connect(this.signers.admin).setRewardFraction(newR))
-        .to.emit(this.gvault, "RewardFractionSet").withArgs(newR);
-      expect(await this.gvault.rewardFractionWad())
+      await expect(this.gvault.connect(this.signers.admin).setExchangeRate(newR))
+        .to.emit(this.gvault, "ExchangeRateSet").withArgs(newR);
+      expect(await this.gvault.exchangeRateWad())
         .to.be.equal(newR);
     })
 
-    it("rewards fraction can not be changed by users", async function () {
+    it("exchange rate can not be changed by users", async function () {
       const newR = (4 * (10 ** 18)).toString();
-      await expect(this.gvault.connect(this.signers.user1).setRewardFraction(newR))
+      await expect(this.gvault.connect(this.signers.user1).setExchangeRate(newR))
         .to.be.revertedWith("Ownable: caller is not the owner")
     })
 
-    it("rewards fraction can be *fractional*", async function () {
+    it("exchange rate can be *fractional*", async function () {
       const newR = '1234567890123456789'; // 1.2345...
-      await this.gvault.connect(this.signers.admin).setRewardFraction(newR);
+      await this.gvault.connect(this.signers.admin).setExchangeRate(newR);
 
       const WAD = (1 * (10 ** 18)).toString();
 
@@ -157,7 +157,7 @@ describe("Unit tests", function () {
         // deposit a bit
         await this.gvault.deposit(initialDeposit);
         // double the amount of rewards
-        await this.gvault.connect(this.signers.admin).setRewardFraction((4 * (10 ** 18)).toString());
+        await this.gvault.connect(this.signers.admin).setExchangeRate((4 * (10 ** 18)).toString());
       })
 
       it("deposits produce more vault tokens", async function () {
@@ -178,7 +178,7 @@ describe("Unit tests", function () {
         // deposit a bit
         await this.gvault.deposit(initialDeposit);
         // half the amount of rewards
-        await this.gvault.connect(this.signers.admin).setRewardFraction((1 * (10 ** 18)).toString());
+        await this.gvault.connect(this.signers.admin).setExchangeRate((1 * (10 ** 18)).toString());
       })
 
       it("deposits produce fewer vault tokens", async function () {
