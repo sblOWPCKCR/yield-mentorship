@@ -84,10 +84,12 @@
     "prettier:check": "prettier --check --config ./.prettierrc.yaml \"**/*.{js,json,md,sol,ts}\"",
     "test": "hardhat test",
     "verify": "mkdir -p .processed; yarn preprocess && hardhat verify",
-    "typechain": "yarn preprocess && cross-env TS_NODE_TRANSPILE_ONLY=true hardhat typechain"
+    "typechain": "yarn preprocess && yarn typechain_abis && cross-env TS_NODE_TRANSPILE_ONLY=true hardhat typechain",
+    "typechain_abis": "typechain --target=ethers-v5 --out-dir=typechain abis/*"
   },
   "packageManager": "yarn@3.0.1-rc.2",
   "dependencies": {
+    "@chainlink/contracts": "^0.2.1",
     "@nomiclabs/hardhat-etherscan": "^2.1.4"
   }
 }

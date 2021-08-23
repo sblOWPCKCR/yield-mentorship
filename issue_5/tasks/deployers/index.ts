@@ -2,11 +2,12 @@ import { task } from "hardhat/config";
 import { TaskArguments } from "hardhat/types";
 
 task("deploy")
+  .addParam("dai")
+  .addParam("priceFeed")
   .setAction(async function (taskArguments: TaskArguments, { ethers }) {
     const addresses: {[name: string]: string} = {};
     const initializers : {[name: string]: () => Iterable<any>} = {
-      "GreenToken": () => {return []},
-      "GreenVault": () => {return [addresses["GreenToken"], (10 ** 18).toString()];}
+      "GreenVault": () => {return [taskArguments.dai, taskArguments.priceFeed];}
     }
 
     for (const contract_name in initializers) {

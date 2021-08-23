@@ -1,18 +1,23 @@
-import hre, { ethers } from "hardhat";
+import hre, { ethers, network } from "hardhat";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/dist/src/signer-with-address";
 
 import { expect } from "chai";
-import { GreenToken } from "../typechain/GreenToken";
 import { GreenVault } from "../typechain/GreenVault";
 import { FixedNumber } from "@ethersproject/bignumber";
+import { DAI } from "../typechain/DAI";
+import { MockAggregatorV3 } from "../typechain/MockAggregatorV3";
+import { parseEther } from "ethers/lib/utils";
 
 const { deployContract } = hre.waffle;
 
+const DAI_abi = require("../abis/DAI.json");
+const DAI_ward = "0x9759A6Ac90977b93B58547b4A71c78317f391A28";
+
 declare module "mocha" {
   export interface Context {
-    gtoken: GreenToken;
-    another_token: GreenToken;
+    dai: DAI;
 
+    priceFeed: MockAggregatorV3;
     gvault: GreenVault;
     signers: { admin: SignerWithAddress, user1: SignerWithAddress, user2: SignerWithAddress };
   }
@@ -26,171 +31,252 @@ describe("Unit tests", function () {
       user1: signers[1],
       user2: signers[2],
     }
+
+
+    this.dai = <DAI>(await ethers.getContractAt(DAI_abi, "0x6b175474e89094c44da98b954eedeac495271d0f", await hre.ethers.getSigner(DAI_ward)));
+    console.log("contract fetched");
+    // we're on mainnet fork, so let's impersonate a ward (contract's creator is one of them)
+    await network.provider.request({
+      method: "hardhat_impersonateAccount",
+      params: [DAI_ward],
+    });
+    // let's fund the guy - he needs to pay tx costs
+    await network.provider.send("hardhat_setBalance", [
+      DAI_ward,
+      parseEther("10").toHexString(),
+    ]);
   });
 
+  const deposit = parseEther("1");
   describe("GreenVault", function () {
-    const starting_balance = 1337;
-
     beforeEach(async function () {
-      this.gtoken = <GreenToken>await deployContract(this.signers.admin,
-        await hre.artifacts.readArtifact("GreenToken"), []);
+      this.priceFeed = (<MockAggregatorV3>await deployContract(this.signers.admin,
+        await hre.artifacts.readArtifact("MockAggregatorV3"), [false, 1, 0]));
 
       this.gvault = (<GreenVault>await deployContract(this.signers.admin,
-        await hre.artifacts.readArtifact("GreenVault"), [this.gtoken.address, (2 * (10 ** 18)).toString()]))
+        await hre.artifacts.readArtifact("GreenVault"), [this.dai.address, this.priceFeed.address]))
         .connect(this.signers.user1);
 
-      for (const user of [this.signers.user1, this.signers.user2]) {
-        await this.gtoken.connect(user).mint(user.address, starting_balance);
-      }
+      // vault starts with 10 DAI
+      await this.dai.mint(this.gvault.address, parseEther("10"));
     });
 
     it("starts empty", async function () {
-      expect(await this.gvault.balanceOf(this.signers.user1.address))
+      expect(await this.dai.balanceOf(this.signers.user1.address))
+        .to.be.equal(0);
+      expect(await (await this.gvault.users(this.signers.user1.address)).borrowed)
         .to.be.equal(0);
     });
 
-    it("doesn't accepts transfers without approvals", async function () {
-      await expect(this.gvault.deposit(starting_balance))
-        .to.be.reverted; // can't check for exact message since it's ERC20-generated and is not prescribed
-    });
-
-    it("doesn't accepts out-of-balance transfers", async function () {
-      await this.gtoken.approve(this.gvault.address, starting_balance * 2);
-
-      await expect(this.gvault.deposit(starting_balance * 2))
-        .to.be.reverted; // can't check for exact message since it's ERC20-generated and is not prescribed
-    });
-
-    describe("mints", function () {
-      beforeEach(async function () {
-        await this.gtoken.connect(this.signers.user1).approve(this.gvault.address, starting_balance);
-      });
+    describe("deposits", function () {
       it("change balance", async function () {
-        await expect(() => this.gvault.deposit(starting_balance))
-          .to.changeTokenBalances(this.gtoken,
-            [this.signers.user1, this.gvault],
-            [-starting_balance, starting_balance]);
+        await expect(() => this.gvault.deposit({ value: deposit }))
+          .to.changeEtherBalances([this.signers.user1, this.gvault], ["-" + deposit.toString(), deposit]);
 
-        expect(await this.gvault.balanceOf(this.signers.user1.address))
-          .to.be.equal(2 * starting_balance);
+        expect((await this.gvault.users(this.signers.user1.address)).deposited)
+          .to.be.equal(deposit);
       });
 
       it("emit events", async function () {
-        await expect(this.gvault.deposit(starting_balance))
-          .to.emit(this.gvault, "Minted").withArgs(this.signers.user1.address, this.gtoken.address, 2 * starting_balance);
+        await expect(this.gvault.deposit({ value: deposit }))
+          .to.emit(this.gvault, "Deposited").withArgs(deposit);
       });
 
       it("don't change other user's balance", async function () {
-        await expect(() => this.gvault.deposit(starting_balance))
-          .to.changeTokenBalance(this.gtoken, this.signers.user2, 0);
+        await expect(() => this.gvault.deposit({ value: deposit }))
+          .to.changeEtherBalance(this.signers.user2, 0);
 
       });
     });
 
-    describe("burns", function () {
+    describe("borrowings", function () {
       beforeEach(async function () {
-        await this.gtoken.connect(this.signers.user1).approve(this.gvault.address, starting_balance);
-        await this.gvault.deposit(starting_balance);
+        await this.gvault.deposit({ value: deposit });
+        await this.priceFeed.setAnswer(1, 0); // 1 ETH -> 1 DAI
       });
 
-      it("by different users are not permitted", async function () {
-        await expect(this.gvault
-          .connect(this.signers.user2)
-          .withdraw(1))
-          .to.be.revertedWith("ERC20: Insufficient balance");
-      })
+      it("change balance", async function () {
+        await this.gvault.borrow(deposit);
+        expect((await this.gvault.users(this.signers.user1.address)).borrowed)
+          .to.be.equal(deposit);
+      });
 
-      it("with insufficient balance are not permitted ", async function () {
-        await expect(this.gvault.withdraw(starting_balance * 2))
-          .to.be.revertedWith("ERC20: Insufficient balance");
-      })
+      it("don't over borrow", async function () {
+        await this.gvault.borrow(deposit);
+        await expect(this.gvault.borrow(deposit))
+          .to.be.revertedWith("Not enough ETH (b)");
+      });
 
-      it("change the balance", async function () {
-        await expect(() => this.gvault.withdraw(starting_balance))
-          .to.changeTokenBalances(this.gtoken, [this.signers.user1, this.gvault], [starting_balance, -starting_balance]);
+      it("emit events", async function () {
+        await expect(this.gvault.borrow(deposit))
+          .to.emit(this.gvault, "Borrowed").withArgs(deposit, deposit);
+      });
 
-        expect(await this.gvault.balanceOf(this.signers.user1.address))
-          .to.be.equal(0);
-      })
+      it("transfers DAI", async function () {
+        for (const priceData of [{ v: 1, d: 0, e: "1" }, { v: 2, d: 0, e: "2" }, { v: 1e17, d: 18, e: "0.1" }]) {
+          await this.priceFeed.setAnswer(priceData.v.toString(), priceData.d);
 
-      it("emit correct message", async function () {
-        await expect(this.gvault.withdraw(starting_balance))
-          .to.emit(this.gvault, "Burned").withArgs(this.signers.user1.address, this.gtoken.address, starting_balance * 2);
-      })
+          await this.gvault.deposit({ value: deposit });
+          await expect(() => this.gvault.borrow(deposit))
+            .to.changeTokenBalances(this.dai,
+              [this.signers.user1, this.gvault],
+              [parseEther(priceData.e).toString(), "-" + parseEther(priceData.e).toString()]
+            );
+        }
+      });
+
+      it("works with changing price feed", async function () {
+        // double the deposit
+        await this.gvault.deposit({ value: deposit });
+        // spend half of ETH with 1:1 rate
+        await this.gvault.borrow(deposit);
+        // spend another half of ETH with 1:2 rate
+        await this.priceFeed.setAnswer(2, 0);
+
+        await expect(() => this.gvault.borrow(deposit))
+          .to.changeTokenBalance(this.dai, this.signers.user1, deposit.mul(2));
+
+        const user_data = await this.gvault.users(this.signers.user1.address);
+        expect(user_data.borrowed)
+          .to.be.equal(user_data.deposited);
+      });
+
+      it("doesn't work with stale feed", async function () {
+        // spend another half of ETH with 1:2 rate
+        await this.priceFeed.setIsStale(true);
+
+        await expect(this.gvault.borrow(deposit))
+          .to.be.revertedWith("Stale feed");
+      });
     });
 
-    it("exchange rate can be increased by admin", async function () {
-      const newR = (4 * (10 ** 18)).toString();
-      await expect(this.gvault.connect(this.signers.admin).setExchangeRate(newR))
-        .to.emit(this.gvault, "ExchangeRateSet").withArgs(newR);
-      expect(await this.gvault.exchangeRateWad())
-        .to.be.equal(newR);
-    })
+    describe("paybacks", function () {
+      beforeEach(async function () {
+        await this.gvault.deposit({ value: deposit });
+        await this.gvault.borrow(deposit);
+        await this.dai.connect(this.signers.user1).approve(this.gvault.address, deposit);
+        await this.priceFeed.setAnswer(1, 0); // 1 ETH -> 1 DAI
+      });
 
-    it("exchange rate can not be changed by users", async function () {
-      const newR = (4 * (10 ** 18)).toString();
-      await expect(this.gvault.connect(this.signers.user1).setExchangeRate(newR))
-        .to.be.revertedWith("Ownable: caller is not the owner")
-    })
-
-    it("exchange rate can be *fractional*", async function () {
-      const newR = '1234567890123456789'; // 1.2345...
-      await this.gvault.connect(this.signers.admin).setExchangeRate(newR);
-
-      const WAD = (1 * (10 ** 18)).toString();
-
-      await this.gtoken.connect(this.signers.user2)
-        .mint(this.signers.user2.address, WAD);
-      await this.gtoken.connect(this.signers.user2)
-        .approve(this.gvault.address, WAD);
-      await this.gvault.connect(this.signers.user2)
-        .deposit(WAD);
-
-      let balance = FixedNumber.fromValue((await this.gvault.balanceOf(this.signers.user2.address)), 18);
-      expect(balance.toUnsafeFloat()).to.be.closeTo(1.234567890123456789, 0.00000001);
-    })
-
-    const initialDeposit = 100;
-    describe("after increasing R", function () {
-      this.beforeEach(async function () {
-        await this.gtoken.connect(this.signers.user1).approve(this.gvault.address, starting_balance);
-        // deposit a bit
-        await this.gvault.deposit(initialDeposit);
-        // double the amount of rewards
-        await this.gvault.connect(this.signers.admin).setExchangeRate((4 * (10 ** 18)).toString());
-      })
-
-      it("deposits produce more vault tokens", async function () {
-        await expect(() => this.gvault.deposit(1))
-          .to.changeTokenBalance(this.gvault, this.signers.user1, 4);
-      })
-
-      it("withdraws need more vault tokens", async function () {
-        await this.gvault.withdraw(initialDeposit / 2);
-        expect(await this.gvault.balanceOf(this.signers.user1.address))
+      it("change balance", async function () {
+        await this.gvault.payback(deposit);
+        expect((await this.gvault.users(this.signers.user1.address)).borrowed)
           .to.be.equal(0);
-      })
+      });
+
+      it("don't over payback", async function () {
+        await this.gvault.payback(deposit);
+        await expect(this.gvault.payback(deposit))
+          .to.be.revertedWith("Not enough debt");
+      });
+
+      it("emit events", async function () {
+        await expect(this.gvault.payback(deposit))
+          .to.emit(this.gvault, "PaidBack").withArgs(deposit, deposit);
+      });
+
+      it("accepts DAI", async function () {
+        for (const priceData of [{ v: 1, d: 0, e: "1" }, { v: 2, d: 0, e: "2" }, { v: 1e17, d: 18, e: "0.1" }]) {
+          await this.priceFeed.setAnswer(priceData.v.toString(), priceData.d);
+
+          await this.gvault.deposit({ value: deposit });
+          await this.gvault.borrow(deposit);
+          // give the user more DAI to repay
+          await this.dai.mint(this.signers.user1.address, deposit);
+          await this.dai.connect(this.signers.user1).approve(this.gvault.address, deposit.mul(2));
+
+          await expect(() => this.gvault.payback(deposit))
+            .to.changeTokenBalances(this.dai,
+              [this.signers.user1, this.gvault],
+              ["-" + parseEther(priceData.e).toString(), parseEther(priceData.e).toString()]
+            );
+        }
+      });
+
+      it("works with changing price feed", async function () {
+        // payback half of ETH with 1:1 rate
+        await (expect(() => this.gvault.payback(deposit.div(2))))
+          .to.changeTokenBalance(this.dai, this.signers.user1, "-" + deposit.div(2).toString())
+
+        // payback another half of ETH with 1:0.5 rate
+        await this.priceFeed.setAnswer(5, 1);
+
+        // expect only half of DAI was required!
+        await (expect(() => this.gvault.payback(deposit.div(2))))
+          .to.changeTokenBalance(this.dai, this.signers.user1, "-" + deposit.div(4).toString())
+      });
+
+      it("doesn't work with stale feed", async function () {
+        // spend another half of ETH with 1:2 rate
+        await this.priceFeed.setIsStale(true);
+
+        await expect(this.gvault.payback(deposit))
+          .to.be.revertedWith("Stale feed");
+      });
     });
 
-    describe("after decreasing R", function () {
-      this.beforeEach(async function () {
-        await this.gtoken.connect(this.signers.user1).approve(this.gvault.address, starting_balance);
-        // deposit a bit
-        await this.gvault.deposit(initialDeposit);
-        // half the amount of rewards
-        await this.gvault.connect(this.signers.admin).setExchangeRate((1 * (10 ** 18)).toString());
-      })
+    describe("withdraws", function () {
+      beforeEach(async function () {
+        // payback 0.5 of deposit
+        await this.gvault.deposit({ value: deposit });
+        await this.gvault.borrow(deposit);
+        await this.dai.connect(this.signers.user1).approve(this.gvault.address, deposit);
+        await this.priceFeed.setAnswer(1, 0); // 1 ETH -> 1 DAI
+        await this.gvault.payback(deposit.div(2));
+      });
 
-      it("deposits produce fewer vault tokens", async function () {
-        await expect(() => this.gvault.deposit(10))
-          .to.changeTokenBalance(this.gvault, this.signers.user1, 10);
-      })
+      it("change balance", async function () {
+        await expect(() => this.gvault.withdraw(deposit.div(2)))
+          .to.changeEtherBalances([this.signers.user1, this.gvault], [deposit.div(2), "-" + deposit.div(2).toString()]);
 
-      it("withdraws need fewer vault tokens", async function () {
-        await this.gvault.withdraw(initialDeposit);
-        expect(await this.gvault.balanceOf(this.signers.user1.address))
-          .to.be.equal(initialDeposit);
-      })
+        expect((await this.gvault.users(this.signers.user1.address)).deposited)
+          .to.be.equal(deposit.div(2));
+      });
+
+      it("can't over withdraw", async function () {
+        await (expect(this.gvault.withdraw(deposit)))
+          .to.be.revertedWith("Not enough ETH (w)");
+      });
+
+      it("emit events", async function () {
+        await expect(this.gvault.withdraw(deposit.div(2)))
+          .to.emit(this.gvault, "Withdrawn").withArgs(deposit.div(2));
+      });
+
+      it("don't change other user's balance", async function () {
+        await expect(() => this.gvault.withdraw(deposit.div(2)))
+          .to.changeEtherBalance(this.signers.user2, 0);
+      });
+    });
+
+    describe("liquidations", function () {
+      beforeEach(async function () {
+        await this.gvault.deposit({ value: deposit });
+        await this.gvault.borrow(deposit);
+        await this.priceFeed.setAnswer(1, 0); // 1 ETH -> 10 DAI
+      });
+
+      it("can be made by owner only", async function () {
+        await this.gvault.connect(this.signers.admin).liquidate(this.signers.user1.address);
+      });
+
+      it("can't be made by regular users'", async function () {
+        await (expect(this.gvault.liquidate(this.signers.user1.address)))
+          .to.be.revertedWith("Ownable: caller is not the owner");
+      });
+
+      it("wipe out the debt", async function () {
+        await this.gvault.connect(this.signers.admin).liquidate(this.signers.user1.address);
+
+        const userData = await this.gvault.users(this.signers.user1.address);
+        expect(userData.borrowed).to.be.equal(0);
+        expect(userData.deposited).to.be.equal(0);
+      });
+
+      it("emits event", async function () {
+        await expect(this.gvault.connect(this.signers.admin).liquidate(this.signers.user1.address))
+          .to.emit(this.gvault, "Liquidated").withArgs(this.signers.user1.address);
+      });
     });
   });
 });
