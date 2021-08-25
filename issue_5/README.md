@@ -16,4 +16,4 @@ If the Ether price drops, and the value of a user's deposit falls below the DAI 
 https://kovan.etherscan.io/address/0xCF89A42Ab77Ba9226100CaC967863f641B7097dA#code
 
 # Time spent
-5hrs
+6hrs

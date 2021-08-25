@@ -62,7 +62,7 @@ contract MockAggregatorV3 is AggregatorV3Interface {
         )
     {
         require(false, "No data present");
-        revert(); // solc is not smart
+        revert("not reacheable"); // solc is not smart
     }
 
     function latestRoundData()

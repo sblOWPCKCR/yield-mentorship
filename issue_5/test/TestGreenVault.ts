@@ -64,7 +64,7 @@ describe("Unit tests", function () {
     it("starts empty", async function () {
       expect(await this.dai.balanceOf(this.signers.user1.address))
         .to.be.equal(0);
-      expect(await (await this.gvault.users(this.signers.user1.address)).borrowed)
+      expect(await (await this.gvault.users(this.signers.user1.address)).borrowedDAI)
         .to.be.equal(0);
     });
 
@@ -97,14 +97,14 @@ describe("Unit tests", function () {
 
       it("change balance", async function () {
         await this.gvault.borrow(deposit);
-        expect((await this.gvault.users(this.signers.user1.address)).borrowed)
+        expect((await this.gvault.users(this.signers.user1.address)).borrowedDAI)
           .to.be.equal(deposit);
       });
 
       it("don't over borrow", async function () {
         await this.gvault.borrow(deposit);
         await expect(this.gvault.borrow(deposit))
-          .to.be.revertedWith("Not enough ETH (b)");
+          .to.be.revertedWith("Not enough collateral (b)");
       });
 
       it("emit events", async function () {
@@ -112,17 +112,20 @@ describe("Unit tests", function () {
           .to.emit(this.gvault, "Borrowed").withArgs(deposit, deposit);
       });
 
-      it("transfers DAI", async function () {
-        for (const priceData of [{ v: 1, d: 0, e: "1" }, { v: 2, d: 0, e: "2" }, { v: 1e17, d: 18, e: "0.1" }]) {
-          await this.priceFeed.setAnswer(priceData.v.toString(), priceData.d);
-
-          await this.gvault.deposit({ value: deposit });
-          await expect(() => this.gvault.borrow(deposit))
-            .to.changeTokenBalances(this.dai,
-              [this.signers.user1, this.gvault],
-              [parseEther(priceData.e).toString(), "-" + parseEther(priceData.e).toString()]
-            );
-        }
+      [{ v: 1, d: 0, e: "1" }, { v: 2, d: 0, e: "2" }, { v: 1e17, d: 18, e: "0.1" }].forEach(function (priceData) {
+        describe(`transfers DAI ${JSON.stringify(priceData)}`, function () {
+          beforeEach(async function () {
+            await this.priceFeed.setAnswer(priceData.v.toString(), priceData.d);
+            await this.gvault.deposit({ value: deposit });
+          });
+          it("works", async function () {
+            await expect(() => this.gvault.borrow(deposit))
+              .to.changeTokenBalances(this.dai,
+                [this.signers.user1, this.gvault],
+                [parseEther(priceData.e).toString(), "-" + parseEther(priceData.e).toString()]
+              );
+          })
+        })
       });
 
       it("works with changing price feed", async function () {
@@ -137,8 +140,8 @@ describe("Unit tests", function () {
           .to.changeTokenBalance(this.dai, this.signers.user1, deposit.mul(2));
 
         const user_data = await this.gvault.users(this.signers.user1.address);
-        expect(user_data.borrowed)
-          .to.be.equal(user_data.deposited);
+        expect(user_data.borrowedDAI)
+          .to.be.equal(deposit.mul(3));
       });
 
       it("doesn't work with stale feed", async function () {
@@ -155,12 +158,11 @@ describe("Unit tests", function () {
         await this.gvault.deposit({ value: deposit });
         await this.gvault.borrow(deposit);
         await this.dai.connect(this.signers.user1).approve(this.gvault.address, deposit);
-        await this.priceFeed.setAnswer(1, 0); // 1 ETH -> 1 DAI
       });
 
       it("change balance", async function () {
         await this.gvault.payback(deposit);
-        expect((await this.gvault.users(this.signers.user1.address)).borrowed)
+        expect((await this.gvault.users(this.signers.user1.address)).borrowedDAI)
           .to.be.equal(0);
       });
 
@@ -173,24 +175,6 @@ describe("Unit tests", function () {
       it("emit events", async function () {
         await expect(this.gvault.payback(deposit))
           .to.emit(this.gvault, "PaidBack").withArgs(deposit, deposit);
-      });
-
-      it("accepts DAI", async function () {
-        for (const priceData of [{ v: 1, d: 0, e: "1" }, { v: 2, d: 0, e: "2" }, { v: 1e17, d: 18, e: "0.1" }]) {
-          await this.priceFeed.setAnswer(priceData.v.toString(), priceData.d);
-
-          await this.gvault.deposit({ value: deposit });
-          await this.gvault.borrow(deposit);
-          // give the user more DAI to repay
-          await this.dai.mint(this.signers.user1.address, deposit);
-          await this.dai.connect(this.signers.user1).approve(this.gvault.address, deposit.mul(2));
-
-          await expect(() => this.gvault.payback(deposit))
-            .to.changeTokenBalances(this.dai,
-              [this.signers.user1, this.gvault],
-              ["-" + parseEther(priceData.e).toString(), parseEther(priceData.e).toString()]
-            );
-        }
       });
 
       it("works with changing price feed", async function () {
@@ -215,13 +199,41 @@ describe("Unit tests", function () {
       });
     });
 
+    describe("paybacks", function () {
+      beforeEach(async function () {
+        await this.dai.connect(this.signers.user1).approve(this.gvault.address, deposit);
+      });
+
+      [{ v: 1, d: 0, e: "1" }, { v: 2, d: 0, e: "2" }, { v: 1e17, d: 18, e: "0.1" }].forEach(function (priceData) {
+        describe(`accepts DAI ${JSON.stringify(priceData)}`, function () {
+          beforeEach(async function () {
+            await this.priceFeed.setAnswer(priceData.v.toString(), priceData.d);
+
+            await this.gvault.deposit({ value: deposit });
+            await this.gvault.borrow(deposit);
+            // give the user more DAI to repay
+            await this.dai.mint(this.signers.user1.address, deposit);
+            await this.dai.connect(this.signers.user1).approve(this.gvault.address, deposit.mul(2));
+          });
+          it("works", async function () {
+            await expect(() => this.gvault.payback(deposit))
+              .to.changeTokenBalances(this.dai,
+                [this.signers.user1, this.gvault],
+                ["-" + parseEther(priceData.e).toString(), parseEther(priceData.e).toString()]
+              );
+          })
+        })
+      });
+    });
+
+
     describe("withdraws", function () {
       beforeEach(async function () {
         // payback 0.5 of deposit
         await this.gvault.deposit({ value: deposit });
+
         await this.gvault.borrow(deposit);
         await this.dai.connect(this.signers.user1).approve(this.gvault.address, deposit);
-        await this.priceFeed.setAnswer(1, 0); // 1 ETH -> 1 DAI
         await this.gvault.payback(deposit.div(2));
       });
 
@@ -233,8 +245,15 @@ describe("Unit tests", function () {
           .to.be.equal(deposit.div(2));
       });
 
-      it("can't over withdraw", async function () {
+      it("can't over withdraw when there's debt", async function () {
         await (expect(this.gvault.withdraw(deposit)))
+          .to.be.revertedWith("Not enough collateral(w)");
+      });
+
+      it("can't over withdraw when there's no debt", async function () {
+        await this.gvault.payback(deposit.div(2));
+        // no debt at this point
+        await (expect(this.gvault.withdraw(deposit.add(1))))
           .to.be.revertedWith("Not enough ETH (w)");
       });
 
@@ -253,10 +272,10 @@ describe("Unit tests", function () {
       beforeEach(async function () {
         await this.gvault.deposit({ value: deposit });
         await this.gvault.borrow(deposit);
-        await this.priceFeed.setAnswer(1, 0); // 1 ETH -> 10 DAI
+        await this.priceFeed.setAnswer(5, 1); // 1 ETH -> .5 DAI
       });
 
-      it("can be made by owner only", async function () {
+      it("can be made by owner", async function () {
         await this.gvault.connect(this.signers.admin).liquidate(this.signers.user1.address);
       });
 
@@ -265,11 +284,17 @@ describe("Unit tests", function () {
           .to.be.revertedWith("Ownable: caller is not the owner");
       });
 
+      it("can't be made if there's no bad debt", async function () {
+        await this.priceFeed.setAnswer(1, 0); // 1 ETH -> 1 DAI
+        await (expect(this.gvault.connect(this.signers.admin).liquidate(this.signers.user1.address)))
+          .to.be.revertedWith("Good debt");
+      });
+
       it("wipe out the debt", async function () {
         await this.gvault.connect(this.signers.admin).liquidate(this.signers.user1.address);
 
         const userData = await this.gvault.users(this.signers.user1.address);
-        expect(userData.borrowed).to.be.equal(0);
+        expect(userData.borrowedDAI).to.be.equal(0);
         expect(userData.deposited).to.be.equal(0);
       });
 

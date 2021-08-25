@@ -46,7 +46,7 @@ contract GreenVault is Ownable {
     /**
     @dev price feed
     */
-    AggregatorV3Interface immutable priceFeed;
+    AggregatorV3Interface internal immutable priceFeed;
 
     /**
     @dev per-user data
@@ -57,9 +57,9 @@ contract GreenVault is Ownable {
          */
         uint256 deposited;
         /**
-        @dev how much ETH was borrowed against
+        @dev how much DAI was borrowed
          */
-        uint256 borrowed;
+        uint256 borrowedDAI;
     }
 
     /**
@@ -89,8 +89,7 @@ contract GreenVault is Ownable {
     }
 
     function getExchangeRate() internal view returns (uint256 rate, uint8 rateDecimals) {
-        (uint80 roundId, int256 answer, , , uint80 answeredInRound) = priceFeed
-            .latestRoundData();
+        (uint80 roundId, int256 answer, , , uint80 answeredInRound) = priceFeed.latestRoundData();
         require(answeredInRound == roundId, "Stale feed");
         require(answer > 0, "negative exchange rate");
         rate = (uint256)(answer);
@@ -107,6 +106,18 @@ contract GreenVault is Ownable {
     }
 
     /**
+    @dev Determines if the user is 'underwater' - has more debt than they can afford
+     */
+    function isUnderwater(
+        UserData storage user,
+        uint256 xRate,
+        uint8 xDecimals
+    ) internal view returns (bool) {
+        uint256 maxUserCanBorrow = FPMath.mul(user.deposited, xRate, xDecimals);
+        return user.borrowedDAI > maxUserCanBorrow; // TODO multiply by collaterization rate
+    }
+
+    /**
     @notice Borrow DAI against previously deposited ETH
     @param collateral how much ETH to borrow against
      */
@@ -114,12 +125,11 @@ contract GreenVault is Ownable {
         IERC20 token = theOnlySupportedToken;
         UserData storage user = users[msg.sender];
 
-        require(user.borrowed + collateral <= user.deposited, "Not enough ETH (b)");
+        (uint256 xRate, uint8 xDecimals) = getExchangeRate();
+        uint256 daiAmount = FPMath.mul(collateral, xRate, xDecimals);
 
-        (uint256 rate, uint8 _decimals) = getExchangeRate();
-        uint256 daiAmount = FPMath.mul(collateral, rate, _decimals);
-
-        user.borrowed += collateral;
+        user.borrowedDAI += daiAmount;
+        require(!isUnderwater(user, xRate, xDecimals), "Not enough collateral (b)");
 
         token.transfer(msg.sender, daiAmount);
         emit Borrowed(collateral, daiAmount);
@@ -134,11 +144,14 @@ contract GreenVault is Ownable {
         IERC20 token = theOnlySupportedToken;
         UserData storage user = users[msg.sender];
 
-        require(ethAmount <= user.borrowed, "Not enough debt");
-        (uint256 rate, uint8 _decimals) = getExchangeRate();
-        uint256 daiAmount = FPMath.mul(ethAmount, rate, _decimals);
+        (uint256 xRate, uint8 xDecimals) = getExchangeRate();
+        uint256 daiAmount = FPMath.mul(ethAmount, xRate, xDecimals);
 
-        user.borrowed -= ethAmount;
+        require(user.borrowedDAI >= daiAmount, "Not enough debt");
+        unchecked {
+            // saving peanuts
+            user.borrowedDAI -= daiAmount; // handles unuderflow
+        }
 
         token.transferFrom(msg.sender, address(this), daiAmount);
         emit PaidBack(ethAmount, daiAmount);
@@ -149,11 +162,18 @@ contract GreenVault is Ownable {
     @param amount how much ETH you want to withdraw
      */
     function withdraw(uint256 amount) public {
+        (uint256 xRate, uint8 xDecimals) = getExchangeRate();
+
         UserData storage user = users[msg.sender];
 
-        require(user.borrowed + amount <= user.deposited, "Not enough ETH (w)");
+        require(user.deposited >= amount, "Not enough ETH (w)");
 
-        user.deposited -= amount;
+        unchecked {
+            // saving peanuts
+            user.deposited -= amount;
+        }
+
+        require(!isUnderwater(user, xRate, xDecimals), "Not enough collateral(w)");
 
         (bool result, ) = msg.sender.call{ value: amount }("");
         require(result, "Failed to send ETH");
@@ -165,6 +185,10 @@ contract GreenVault is Ownable {
     @notice Liquidate user - wipe out their debt and deposits
      */
     function liquidate(address user) public onlyOwner {
+        (uint256 xRate, uint8 xDecimals) = getExchangeRate();
+
+        require(isUnderwater(users[user], xRate, xDecimals), "Good debt");
+
         delete users[user];
 
         emit Liquidated(user);
