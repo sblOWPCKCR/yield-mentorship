@@ -15,7 +15,7 @@ import { resolve } from "path";
 
 import { config as dotenvConfig } from "dotenv";
 import { HardhatUserConfig } from "hardhat/config";
-import { NetworkUserConfig } from "hardhat/types";
+import { NetworkUserConfig, HttpNetworkUserConfig } from "hardhat/types";
 
 dotenvConfig({ path: resolve(__dirname, "./.env") });
 
@@ -49,8 +49,12 @@ if (!etherscanKey) {
 // const needsSmtChecker = (process.env.SMT_CHECKER == "1")
 const contractsDir = "./contracts"; //needsPreprocessing || needsSmtChecker ? "./contracts" : "./.processed";
 
+function getChainUrl(network: keyof typeof chainIds): string {
+  return "https://" + network + ".infura.io/v3/" + infuraApiKey;
+}
+
 function getChainConfig(network: keyof typeof chainIds): NetworkUserConfig {
-  const url: string = "https://" + network + ".infura.io/v3/" + infuraApiKey;
+  const url: string = getChainUrl(network);
   return {
     accounts: {
       count: 10,
@@ -74,6 +78,9 @@ const config: HardhatUserConfig = {
     hardhat: {
       accounts: {
         mnemonic,
+      },
+      forking: {
+        url: getChainUrl("mainnet")
       },
       chainId: chainIds.hardhat,
       // See https://github.com/sc-forks/solidity-coverage/issues/652
