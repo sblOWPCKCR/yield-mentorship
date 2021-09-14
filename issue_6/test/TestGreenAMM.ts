@@ -56,7 +56,7 @@ describe("Unit tests", function () {
         .to.be.equal(0);
     });
 
-    describe("Init", function () {
+    describe("init", function () {
       beforeEach(async function () {
         // re-create gAMM before each 'init' test
         this.gAMM = (<GreenAMM>await deployContract(this.admin,
@@ -68,35 +68,35 @@ describe("Unit tests", function () {
       });
 
       it("can be done by the owner", async function () {
-        this.gAMM.Init(1, 1);
+        this.gAMM.init(1, 1);
       })
 
       it("can't be done by a non-owner", async function () {
-        await expect(this.gAMM.connect(this.user1).Init(1, 1))
+        await expect(this.gAMM.connect(this.user1).init(1, 1))
           .to.be.revertedWith("Ownable: caller is not the owner");
       })
 
       it("can be done only once", async function () {
-        this.gAMM.Init(1, 1);
-        await expect(this.gAMM.Init(1, 1))
+        this.gAMM.init(1, 1);
+        await expect(this.gAMM.init(1, 1))
           .to.be.revertedWith("already initialized");
       })
 
       it("can't create a pool with no tokens", async function () {
-        await expect(this.gAMM.Init(1, 0))
+        await expect(this.gAMM.init(1, 0))
           .to.be.revertedWith("Can't create empty pool");
 
-        await expect(this.gAMM.Init(0, 1))
+        await expect(this.gAMM.init(0, 1))
           .to.be.revertedWith("Can't create empty pool");
       })
 
       it("recomputes K", async function () {
-        await expect(this.gAMM.Init(parseEther("7"), parseEther("191")))
+        await expect(this.gAMM.init(parseEther("7"), parseEther("191")))
           .to.emit(this.gAMM, "KChanged").withArgs(parseEther("1337").mul(WAD));
       })
 
       it("emits LP tokens", async function () {
-        await expect(() => this.gAMM.Init(parseEther("7"), parseEther("191")))
+        await expect(() => this.gAMM.init(parseEther("7"), parseEther("191")))
           .to.changeTokenBalance(this.gAMM, this.admin, parseEther("1337").mul(WAD));
 
         expect(await this.gAMM.totalSupply())
@@ -104,28 +104,28 @@ describe("Unit tests", function () {
       })
     });
 
-    describe("Mint", function () {
+    describe("mint", function () {
       beforeEach(async function () {
         // 1:5
-        await this.gAMM.connect(this.admin).Init(parseEther("1"), parseEther("5"));
+        await this.gAMM.connect(this.admin).init(parseEther("1"), parseEther("5"));
         // k == 5
         // total supply == 5
       });
 
       it("can't unbalance", async function () {
-        await expect(this.gAMM.Mint(1, 10))
+        await expect(this.gAMM.mint(1, 10))
           .to.be.revertedWith("Unbalancing");
-        await expect(this.gAMM.Mint(5, 1))
+        await expect(this.gAMM.mint(5, 1))
           .to.be.revertedWith("Unbalancing");
       })
 
       it("recomputes K", async function () {
-        await expect(this.gAMM.Mint(parseEther("2"), parseEther("10")))
+        await expect(this.gAMM.mint(parseEther("2"), parseEther("10")))
           .to.emit(this.gAMM, "KChanged").withArgs(parseEther("45").mul(WAD));
       })
 
       it("emits LP tokens", async function () {
-        await expect(() => this.gAMM.Mint(parseEther("2"), parseEther("10")))
+        await expect(() => this.gAMM.mint(parseEther("2"), parseEther("10")))
           .to.changeTokenBalance(this.gAMM, this.user1, parseEther("10").mul(WAD)); // double the original amount
 
         expect(await this.gAMM.totalSupply())
@@ -133,30 +133,30 @@ describe("Unit tests", function () {
       })
     });
 
-    describe("Burn", function () {
+    describe("burn", function () {
       beforeEach(async function () {
         // 1:5
-        await this.gAMM.connect(this.admin).Init(parseEther("1"), parseEther("5"));
-        await this.gAMM.Mint(parseEther("1"), parseEther("5"));
+        await this.gAMM.connect(this.admin).init(parseEther("1"), parseEther("5"));
+        await this.gAMM.mint(parseEther("1"), parseEther("5"));
         // k == 20
         // total supply == 10
       });
 
       it("can't unbalance", async function () {
-        await expect(this.gAMM.Burn(1, 10))
+        await expect(this.gAMM.burn(1, 10))
           .to.be.revertedWith("Unbalancing");
-        await expect(this.gAMM.Burn(5, 1))
+        await expect(this.gAMM.burn(5, 1))
           .to.be.revertedWith("Unbalancing");
       })
 
       it("recomputes K", async function () {
-        await expect(this.gAMM.Burn(parseEther("1"), parseEther("5")))
+        await expect(this.gAMM.burn(parseEther("1"), parseEther("5")))
           .to.emit(this.gAMM, "KChanged").withArgs(parseEther("5").mul(WAD));
       })
 
       it("burns LP tokens", async function () {
         await this.gAMM.approve(this.gAMM.address, parseEther("5"))
-        await expect(() => this.gAMM.Burn(parseEther("1"), parseEther("5")))
+        await expect(() => this.gAMM.burn(parseEther("1"), parseEther("5")))
           .to.changeTokenBalance(this.gAMM, this.user1, "-" + parseEther("5").mul(WAD).toString()); // double the original amount
 
         expect(await this.gAMM.totalSupply())
@@ -164,17 +164,17 @@ describe("Unit tests", function () {
       })
     });
 
-    describe("SellX", function () {
+    describe("sellX", function () {
       const xSupply = parseEther("10");
       const ySupply = parseEther("50");
       beforeEach(async function () {
         // 1:5
-        await this.gAMM.connect(this.admin).Init(xSupply, ySupply);
+        await this.gAMM.connect(this.admin).init(xSupply, ySupply);
         // k == 500
       });
 
       it("selling 0 tokens is allowed", async function () {
-        await expect(() => this.gAMM.SellX(0))
+        await expect(() => this.gAMM.sellX(0))
           .to.changeTokenBalance(this.xToken, this.user1, 0)
       })
 
@@ -183,7 +183,7 @@ describe("Unit tests", function () {
 
         // k == 500
         // with 10 + 15 = 25 X tokens, the AMM only needs to keep 20 Y tokens => 30 tokens are returned
-        await expect(() => this.gAMM.SellX(parseEther("15")))
+        await expect(() => this.gAMM.sellX(parseEther("15")))
           .to.changeTokenBalance(this.xToken, this.user1, "-" + parseEther("15").toString());
 
         expect((await this.yToken.balanceOf(this.user1.address)).sub(yBalance))
@@ -191,22 +191,22 @@ describe("Unit tests", function () {
       })
 
       it("emits event", async function () {
-        await expect(this.gAMM.SellX(parseEther("15")))
+        await expect(this.gAMM.sellX(parseEther("15")))
           .to.emit(this.gAMM, "SoldX").withArgs(parseEther("15"), parseEther("30"));
       })
     });
 
-    describe("SellY", function () {
+    describe("sellY", function () {
       const xSupply = parseEther("50");
       const ySupply = parseEther("10");
       beforeEach(async function () {
         // 5:1
-        await this.gAMM.connect(this.admin).Init(xSupply, ySupply);
+        await this.gAMM.connect(this.admin).init(xSupply, ySupply);
         // k == 500
       });
 
       it("selling 0 tokens is allowed", async function () {
-        await expect(() => this.gAMM.SellY(0))
+        await expect(() => this.gAMM.sellY(0))
           .to.changeTokenBalance(this.xToken, this.user1, 0)
       })
 
@@ -215,7 +215,7 @@ describe("Unit tests", function () {
 
         // k == 500
         // with 10 + 15 = 25 Y tokens, the AMM only needs to keep 20 X tokens => 30 tokens are returned
-        await expect(() => this.gAMM.SellY(parseEther("15")))
+        await expect(() => this.gAMM.sellY(parseEther("15")))
           .to.changeTokenBalance(this.yToken, this.user1, "-" + parseEther("15").toString());
 
         expect((await this.xToken.balanceOf(this.user1.address)).sub(xBalance))
@@ -223,7 +223,7 @@ describe("Unit tests", function () {
       })
 
       it("emits event", async function () {
-        await expect(this.gAMM.SellY(parseEther("15")))
+        await expect(this.gAMM.sellY(parseEther("15")))
           .to.emit(this.gAMM, "SoldY").withArgs(parseEther("30"), parseEther("15"));
       })
     });
