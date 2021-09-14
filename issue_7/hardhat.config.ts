@@ -14,8 +14,27 @@ import "./tasks/deployers";
 import { resolve } from "path";
 
 import { config as dotenvConfig } from "dotenv";
-import { HardhatUserConfig } from "hardhat/config";
-import { NetworkUserConfig, HttpNetworkUserConfig } from "hardhat/types";
+import { HardhatUserConfig, subtask } from "hardhat/config";
+import { NetworkUserConfig } from "hardhat/types";
+import { TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD } from "hardhat/builtin-tasks/task-names";
+
+subtask(TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD, async (args: any, hre, runSuper) => {
+  if (args.solcVersion === "0.8.8") {
+    const compilerPath = "/home/ec2-user/solidity/build/solc/solc";
+
+    return {
+      compilerPath,
+      isSolcJs: false, // if you are using a native compiler, set this to false
+      version: args.solcVersion,
+      // this is used as extra information in the build-info files, but other than
+      // that is not important
+      longVersion: "0.8.8-blah"
+    }
+  }
+
+  // we just use the default subtask if the version is not 0.8.5
+  return runSuper();
+})
 
 dotenvConfig({ path: resolve(__dirname, "./.env") });
 
@@ -46,15 +65,11 @@ if (!etherscanKey) {
 }
 
 // const needsPreprocessing = false; //(process.env.YARN_PREPROCESS == "1");
-// const needsSmtChecker = (process.env.SMT_CHECKER == "1")
+const needsSmtChecker = (process.env.SMT_CHECKER == "1")
 const contractsDir = "./contracts"; //needsPreprocessing || needsSmtChecker ? "./contracts" : "./.processed";
 
-function getChainUrl(network: keyof typeof chainIds): string {
-  return "https://" + network + ".infura.io/v3/" + infuraApiKey;
-}
-
 function getChainConfig(network: keyof typeof chainIds): NetworkUserConfig {
-  const url: string = getChainUrl(network);
+  const url: string = "https://" + network + ".infura.io/v3/" + infuraApiKey;
   return {
     accounts: {
       count: 10,
@@ -79,9 +94,6 @@ const config: HardhatUserConfig = {
       accounts: {
         mnemonic,
       },
-      forking: {
-        url: getChainUrl("mainnet")
-      },
       chainId: chainIds.hardhat,
       // See https://github.com/sc-forks/solidity-coverage/issues/652
       hardfork: process.env.CODE_COVERAGE ? "berlin" : "london",
@@ -100,15 +112,15 @@ const config: HardhatUserConfig = {
   solidity: {
     version: "0.8.7",
     settings: {
-      // modelChecker: needsSmtChecker ? {
-      //   engine: needsSmtChecker ? "chc" : "none",
-      //   showUnproved: true,
-      //   timeout: 0,
-      //   // targets: ["assert"],
-      //   contracts: {
-      //     "contracts/GreenVault.sol": ["GreenVaultEngineTest"]
-      //   }
-      // } : null,
+      modelChecker: needsSmtChecker ? {
+        engine: needsSmtChecker ? "chc" : "none",
+        showUnproved: true,
+        timeout: 0,
+        // targets: ["assert"],
+        contracts: {
+          "contracts/GreenAMM.sol": ["GreenAMMEngineTest"]
+        }
+      } : null,
       metadata: {
         // Not including the metadata hash
         // https://github.com/paulrberg/solidity-template/issues/31
